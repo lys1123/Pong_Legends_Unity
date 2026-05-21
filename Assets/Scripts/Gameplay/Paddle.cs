@@ -5,6 +5,7 @@ using UnityEngine.InputSystem;
 namespace PongLegends
 {
     public enum PaddleMode { Player, AI }
+    public enum KickType   { None, High, Strong, Low }
 
     [RequireComponent(typeof(SpriteRenderer))]
     public class Paddle : MonoBehaviour
@@ -23,6 +24,7 @@ namespace PongLegends
         private bool _isFrozen;
         private float _speedMultiplier = 1f;
         private bool _controlsInverted;
+        private float _currentVelocity;
 
         // Flame/electric animation children
         private GameObject[] _animatedChildren;
@@ -49,9 +51,14 @@ namespace PongLegends
 
         private void Update()
         {
-            if (_isFrozen) return;
+            if (_isFrozen)
+            {
+                _currentVelocity = 0f;
+                return;
+            }
 
             float move = (mode == PaddleMode.Player ? PlayerInput() : AIInput()) * _speedMultiplier;
+            _currentVelocity = move;
             Vector3 pos = transform.position;
             float halfH = transform.localScale.y * 0.5f;
             pos.y = Mathf.Clamp(pos.y + move * Time.deltaTime,
@@ -67,8 +74,8 @@ namespace PongLegends
             var kb = Keyboard.current;
             if (kb == null) return 0f;
             float v = 0f;
-            if (kb.wKey.isPressed || kb.upArrowKey.isPressed)   v += 1f;
-            if (kb.sKey.isPressed || kb.downArrowKey.isPressed) v -= 1f;
+            if (kb.upArrowKey.isPressed)   v += 1f;
+            if (kb.downArrowKey.isPressed) v -= 1f;
             return v * PlayerSpeed * (_controlsInverted ? -1f : 1f);
         }
 
@@ -81,6 +88,18 @@ namespace PongLegends
         }
 
         public Bounds GetBounds() => _renderer.bounds;
+        public float GetVelocity() => _currentVelocity;
+
+        public KickType GetKickInput()
+        {
+            if (mode != PaddleMode.Player) return KickType.None;
+            var kb = Keyboard.current;
+            if (kb == null) return KickType.None;
+            if (kb.aKey.isPressed) return KickType.High;
+            if (kb.sKey.isPressed) return KickType.Strong;
+            if (kb.dKey.isPressed) return KickType.Low;
+            return KickType.None;
+        }
 
         // --- Ability API ---
 
@@ -128,11 +147,32 @@ namespace PongLegends
             _renderer.color = saved;
         }
 
-        // Teleports the paddle to a random Y position (within bounds).
+        private const float TeleportMinDistance = 1.5f;
+
+        // Teleports the paddle to a random Y position guaranteed to be at least
+        // TeleportMinDistance away from its current position.
         public void TeleportRandomY()
         {
-            float halfH = transform.localScale.y * 0.5f;
-            float y = UnityEngine.Random.Range(-Ball.WorldHalfHeight + halfH, Ball.WorldHalfHeight - halfH);
+            float halfH    = transform.localScale.y * 0.5f;
+            float lo       = -Ball.WorldHalfHeight + halfH;
+            float hi       =  Ball.WorldHalfHeight - halfH;
+            float currentY = transform.position.y;
+
+            float belowLen = Mathf.Max(0f, currentY - TeleportMinDistance - lo);
+            float aboveLen = Mathf.Max(0f, hi - (currentY + TeleportMinDistance));
+            float total    = belowLen + aboveLen;
+
+            float y;
+            if (total <= 0f)
+            {
+                y = currentY > 0f ? lo : hi;
+            }
+            else
+            {
+                float r = UnityEngine.Random.Range(0f, total);
+                y = r < belowLen ? lo + r : currentY + TeleportMinDistance + (r - belowLen);
+            }
+
             transform.position = new Vector3(transform.position.x, y, 0f);
         }
 

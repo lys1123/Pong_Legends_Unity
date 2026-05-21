@@ -29,7 +29,7 @@ namespace PongLegends.Editor
 
             CreateCharacter("JohnnyPong",   "Johnny Pong",   HexColor("D2691E"), HexColor("FFD700"), AbilityType.CoolWave,      VisualFeature.Sunglasses,  1.0f);
             CreateCharacter("RyuPong",      "Ryu Pong",      HexColor("FFFFFF"), HexColor("FF0000"), AbilityType.Uppercut,      VisualFeature.Headband,    1.0f);
-            CreateCharacter("ElectraPong",  "Electra Pong",  HexColor("FFFF00"), HexColor("00FFFF"), AbilityType.LightningBolt, VisualFeature.Electric,    1.0f);
+            CreateCharacter("TelePong",     "Tele-Pong",     HexColor("FFFF00"), HexColor("00FFFF"), AbilityType.LightningBolt, VisualFeature.Electric,    1.0f);
             CreateCharacter("TankPong",     "Tank Pong",     HexColor("808080"), HexColor("556B2F"), AbilityType.IronShell,     VisualFeature.Armor,       1.2f);
             CreateCharacter("ShadowPong",   "Shadow Pong",   HexColor("4B0082"), HexColor("8B00FF"), AbilityType.ShadowClone,   VisualFeature.NinjaMask,   1.0f);
             CreateCharacter("PixelPong",    "Pixel Pong",    HexColor("00FF00"), HexColor("FFFFFF"), AbilityType.GlitchBomb,    VisualFeature.PixelBlocks, 1.0f);
@@ -234,7 +234,7 @@ namespace PongLegends.Editor
 
             // Instructions
             MakeText(canvasGO.transform, "Instructions",
-                "W/S or ↑↓ to move  •  SPACE for special  •  ESC to quit",
+                "↑↓ to move  •  A/S/D for kicks  •  SPACE for special  •  ESC to quit",
                 new Vector2(0, -330), new Vector2(900, 26), 18,
                 new Color(0.6f, 0.6f, 0.6f), FontStyles.Normal);
 
@@ -339,7 +339,7 @@ namespace PongLegends.Editor
 
         private static CharacterDefinition[] LoadAllCharacters()
         {
-            string[] names = { "JohnnyPong", "RyuPong", "ElectraPong", "TankPong",
+            string[] names = { "JohnnyPong", "RyuPong", "TelePong", "TankPong",
                                "ShadowPong", "PixelPong", "InfernoPong", "FrostPong" };
             var defs = new CharacterDefinition[names.Length];
             for (int i = 0; i < names.Length; i++)

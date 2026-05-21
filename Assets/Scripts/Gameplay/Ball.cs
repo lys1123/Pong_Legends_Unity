@@ -13,6 +13,9 @@ namespace PongLegends
         public const float InitialSpeed    = 4f;
         public const float MaxSpeed        = 6f;
         private const float SpeedBumpPerHit = 1.05f;
+        private const float EnglishFactor   = 0.35f;
+        private const float KickAngle        = 40f;
+        private const float StrongKickSpeed  = 12f;
 
         public event Action<PaddleSide> OnPaddleHit;
         public event Action<PaddleSide> OnScore;
@@ -93,15 +96,26 @@ namespace PongLegends
             if (side == PaddleSide.Player && _velocity.x < 0f)
             {
                 _velocity.x = Mathf.Abs(_velocity.x);
-                ApplySpin(pos.y, b);
-                BumpSpeed();
+                KickType kick = paddle.GetKickInput();
+                if (kick != KickType.None)
+                    ApplyKick(kick, 1f);
+                else
+                {
+                    ApplySpin(pos.y, b);
+                    ApplyEnglish(paddle);
+                    BumpSpeed();
+                }
                 OnPaddleHit?.Invoke(PaddleSide.Player);
             }
             else if (side == PaddleSide.AI && _velocity.x > 0f)
             {
                 _velocity.x = -Mathf.Abs(_velocity.x);
                 ApplySpin(pos.y, b);
-                BumpSpeed();
+                ApplyEnglish(paddle);
+                if (_velocity.magnitude > MaxSpeed)
+                    _velocity = _velocity.normalized * MaxSpeed;
+                else
+                    BumpSpeed();
                 OnPaddleHit?.Invoke(PaddleSide.AI);
             }
         }
@@ -110,6 +124,29 @@ namespace PongLegends
         {
             float normalized = Mathf.Clamp((ballY - b.center.y) / (b.size.y * 0.5f), -1f, 1f);
             _velocity.y = normalized * 1.5f;
+        }
+
+        private void ApplyEnglish(Paddle paddle)
+        {
+            _velocity.y += paddle.GetVelocity() * EnglishFactor;
+        }
+
+        private void ApplyKick(KickType kick, float xSign)
+        {
+            float speed = Mathf.Min(_velocity.magnitude * SpeedBumpPerHit, MaxSpeed);
+            float rad   = KickAngle * Mathf.Deg2Rad;
+            switch (kick)
+            {
+                case KickType.High:
+                    _velocity = new Vector2(Mathf.Cos(rad) * xSign,  Mathf.Sin(rad)) * speed;
+                    break;
+                case KickType.Strong:
+                    _velocity = new Vector2(xSign, 0f) * StrongKickSpeed;
+                    break;
+                case KickType.Low:
+                    _velocity = new Vector2(Mathf.Cos(rad) * xSign, -Mathf.Sin(rad)) * speed;
+                    break;
+            }
         }
 
         private void BumpSpeed()

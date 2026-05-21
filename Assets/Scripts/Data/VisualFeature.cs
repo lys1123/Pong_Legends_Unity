@@ -4,7 +4,7 @@ namespace PongLegends
     {
         Sunglasses,   // Johnny Pong
         Headband,     // Ryu Pong
-        Electric,     // Electra Pong
+        Electric,     // Tele-Pong
         Armor,        // Tank Pong
         NinjaMask,    // Shadow Pong
         PixelBlocks,  // Pixel Pong
