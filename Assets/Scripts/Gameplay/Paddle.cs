@@ -25,6 +25,7 @@ namespace PongLegends
         private float _speedMultiplier = 1f;
         private bool _controlsInverted;
         private float _currentVelocity;
+        private Transform _overrideTrackingTarget;
 
         // Flame/electric animation children
         private GameObject[] _animatedChildren;
@@ -79,10 +80,19 @@ namespace PongLegends
             return v * PlayerSpeed * (_controlsInverted ? -1f : 1f);
         }
 
+        // Directs the AI to track a specific transform instead of the ball.
+        // Pass null to revert to normal ball tracking.
+        public void SetTrackingTarget(Transform t) => _overrideTrackingTarget = t;
+
         private float AIInput()
         {
-            if (ball == null) return 0f;
-            float diff = ball.transform.position.y - transform.position.y;
+            // _overrideTrackingTarget becomes Unity-null automatically when the GO is destroyed,
+            // so no explicit clear is needed when a ghost ball disappears.
+            Transform target = _overrideTrackingTarget != null
+                ? _overrideTrackingTarget
+                : ball != null ? ball.transform : null;
+            if (target == null) return 0f;
+            float diff = target.position.y - transform.position.y;
             if (Mathf.Abs(diff) < AIDeadZone) return 0f;
             return Mathf.Sign(diff) * AISpeed;
         }

@@ -22,6 +22,8 @@ namespace PongLegends
         private const float AICooldownMin = 3f;
         private const float AICooldownMax = 6f;
 
+        private readonly GameObject[] _ironShields = new GameObject[2];
+
         public void Initialize(SessionData session, Ball ball, Paddle playerPaddle, Paddle aiPaddle)
         {
             _session      = session;
@@ -57,13 +59,19 @@ namespace PongLegends
         private void Activate(PaddleSide side)
         {
             int idx = (int)side;
-            if (_abilityActive[idx]) return;   // already in use — do nothing
-
-            _abilityActive[idx] = true;
-
             CharacterDefinition def = side == PaddleSide.Player
                 ? _session.playerCharacter
                 : _session.aiCharacter;
+
+            // IronDefense bypasses the cooldown lock — reactivation replaces the existing shield
+            if (def.abilityType == AbilityType.IronShell)
+            {
+                ExecuteIronDefense(side);
+                return;
+            }
+
+            if (_abilityActive[idx]) return;   // already in use — do nothing
+            _abilityActive[idx] = true;
 
             if (def.abilityType == AbilityType.ShadowClone)
             {
@@ -261,6 +269,46 @@ namespace PongLegends
             return cameras;
         }
 
+        // ── Iron Defense ─────────────────────────────────────────────────────────
+
+        private const float ShieldOffset = 0.6f; // world units in front of the paddle center
+
+        private void ExecuteIronDefense(PaddleSide side)
+        {
+            int idx = (int)side;
+
+            if (_ironShields[idx] != null)
+                Destroy(_ironShields[idx]);
+
+            Paddle ownPaddle = side == PaddleSide.Player ? _playerPaddle : _aiPaddle;
+            float  xDir      = side == PaddleSide.Player ? 1f            : -1f;
+
+            CharacterDefinition def = side == PaddleSide.Player
+                ? _session.playerCharacter
+                : _session.aiCharacter;
+
+            float   paddleWidth  = ownPaddle.GetBounds().size.x;
+            float   paddleHeight = ownPaddle.GetBounds().size.y;
+            Vector3 pos          = ownPaddle.transform.position + new Vector3(xDir * ShieldOffset, 0f, 0f);
+
+            var go     = new GameObject("IronShield");
+            var shield = go.AddComponent<IronShield>();
+            shield.Initialize(_ball, side, pos, paddleWidth, paddleHeight, def.paddleColor, def.accentColor);
+            _ironShields[idx] = go;
+        }
+
+        private void OnDisable()
+        {
+            for (int i = 0; i < _ironShields.Length; i++)
+            {
+                if (_ironShields[i] != null)
+                {
+                    Destroy(_ironShields[i]);
+                    _ironShields[i] = null;
+                }
+            }
+        }
+
         // ── Uppercut ─────────────────────────────────────────────────────────────
 
         private void ExecuteUppercut(PaddleSide side)
@@ -301,27 +349,45 @@ namespace PongLegends
             int realIdx = UnityEngine.Random.Range(0, 3);
 
             _ghostCount[idx] = 0;
+            // Ghosts are visually distinct only to the caster (the player).
+            // When the AI casts, all balls look identical so the player is deceived.
+            bool ghostsVisibleToCaster = side == PaddleSide.Player;
+            var allTransforms = new Transform[3];
             for (int i = 0; i < 3; i++)
             {
                 Vector2 v = new Vector2(Mathf.Cos(angles[i]), Mathf.Sin(angles[i])) * speed;
                 if (i == realIdx)
+                {
                     _ball.SetVelocity(v);
+                    allTransforms[i] = _ball.transform;
+                }
                 else
                 {
                     _ghostCount[idx]++;
-                    SpawnGhost(_ball.transform.position, v * 0.9f, idx);
+                    allTransforms[i] = SpawnGhost(_ball.transform.position, v * 0.9f, idx, ghostsVisibleToCaster).transform;
                 }
+            }
+
+            // When the player uses Shadow Clone, send the AI after a randomly chosen ball.
+            // The AI's override auto-clears (Unity null) when a ghost GO is destroyed,
+            // falling back to normal ball tracking at that point.
+            if (side == PaddleSide.Player)
+            {
+                int aiPick = UnityEngine.Random.Range(0, 3);
+                _aiPaddle.SetTrackingTarget(allTransforms[aiPick]);
             }
         }
 
-        private void SpawnGhost(Vector3 position, Vector2 velocity, int sideIdx)
+        private static readonly Color _ghostVisibleColor = new(1f, 1f, 1f, 0.3f);
+
+        private GameObject SpawnGhost(Vector3 position, Vector2 velocity, int sideIdx, bool visibleToCaster)
         {
             var go = new GameObject("GhostBall");
             go.transform.position   = position;
             go.transform.localScale = new Vector3(Ball.Radius * 2f, Ball.Radius * 2f, 1f);
             var sr = go.AddComponent<SpriteRenderer>();
             sr.sprite       = SpriteFactory.Square;
-            sr.color        = new Color(1f, 1f, 1f, 0.4f);
+            sr.color        = visibleToCaster ? _ghostVisibleColor : Color.white;
             sr.sortingOrder = 2;
             var ghost = go.AddComponent<GhostBall>();
             ghost.velocity = velocity;
@@ -329,9 +395,14 @@ namespace PongLegends
             {
                 _ghostCount[sideIdx]--;
                 if (_ghostCount[sideIdx] <= 0)
+                {
                     _abilityActive[sideIdx] = false;
+                    if (sideIdx == (int)PaddleSide.Player)
+                        _aiPaddle.SetTrackingTarget(null);
+                }
             };
             Destroy(go, 2f);
+            return go;
         }
 
         // ── Projectile spawning ──────────────────────────────────────────────────

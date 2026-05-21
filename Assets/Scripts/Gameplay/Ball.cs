@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace PongLegends
@@ -26,6 +27,7 @@ namespace PongLegends
         private Vector2 _velocity;
         private bool _inPlay;
         private SpriteRenderer _renderer;
+        private readonly List<IronShield> _shields = new();
 
         private void Awake()
         {
@@ -63,6 +65,8 @@ namespace PongLegends
             BounceOffWalls();
             CheckPaddleCollision(playerPaddle, PaddleSide.Player);
             CheckPaddleCollision(aiPaddle,     PaddleSide.AI);
+            for (int i = 0; i < _shields.Count; i++)
+                if (_shields[i] != null) CheckShieldCollision(_shields[i]);
             CheckScoring();
         }
 
@@ -119,6 +123,39 @@ namespace PongLegends
                 OnPaddleHit?.Invoke(PaddleSide.AI);
             }
         }
+
+        private void CheckShieldCollision(IronShield shield)
+        {
+            Bounds b    = shield.GetBounds();
+            Vector2 pos = transform.position;
+
+            bool overlapping =
+                pos.x + Radius > b.min.x && pos.x - Radius < b.max.x &&
+                pos.y + Radius > b.min.y && pos.y - Radius < b.max.y;
+
+            if (!overlapping) return;
+
+            if (shield.Side == PaddleSide.Player && _velocity.x < 0f)
+            {
+                _velocity.x = Mathf.Abs(_velocity.x);
+                ApplySpin(pos.y, b);
+                BumpSpeed();
+                OnPaddleHit?.Invoke(PaddleSide.Player);
+            }
+            else if (shield.Side == PaddleSide.AI && _velocity.x > 0f)
+            {
+                _velocity.x = -Mathf.Abs(_velocity.x);
+                ApplySpin(pos.y, b);
+                if (_velocity.magnitude > MaxSpeed)
+                    _velocity = _velocity.normalized * MaxSpeed;
+                else
+                    BumpSpeed();
+                OnPaddleHit?.Invoke(PaddleSide.AI);
+            }
+        }
+
+        public void AddShield(IronShield s)    => _shields.Add(s);
+        public void RemoveShield(IronShield s) => _shields.Remove(s);
 
         private void ApplySpin(float ballY, Bounds b)
         {

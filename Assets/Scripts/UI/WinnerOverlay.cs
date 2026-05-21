@@ -16,11 +16,6 @@ namespace PongLegends
 
         private bool _showing;
 
-        private void Awake()
-        {
-            panel?.SetActive(false);
-        }
-
         public void Show(bool playerWon, string winnerName)
         {
             _showing = true;

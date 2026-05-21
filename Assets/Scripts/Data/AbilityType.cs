@@ -6,7 +6,7 @@ namespace PongLegends
         Paparazzi     = 0,  // Johnny Pong  - cameras appear at corners for 1 s, then flash freezes both paddles for 1 s
         Uppercut      = 1,  // Ryu Pong     - launches nearby ball at sharp upward angle, 10× speed
         LightningBolt = 2,  // Tele-Pong    - instant projectile, teleports target
-        IronShell     = 3,  // Tank Pong    - heavy projectile, deflects ball / shrinks paddle
+        IronShell     = 3,  // Tank Pong    - drops a stationary shield in front of paddle; ball bounces off it like a paddle
         ShadowClone   = 4,  // Shadow Pong  - splits ball into 3 (no projectile)
         GlitchBomb    = 5,  // Pixel Pong   - glitch projectile, scrambles ball / inverts controls
         Fireball      = 6,  // Inferno Pong - fast projectile, speeds ball / shrinks paddle
@@ -20,7 +20,7 @@ namespace PongLegends
             AbilityType.Paparazzi     => "Paparazzi",
             AbilityType.Uppercut      => "Uppercut",
             AbilityType.LightningBolt => "Lightning Bolt",
-            AbilityType.IronShell     => "Iron Shell",
+            AbilityType.IronShell     => "Iron Defense",
             AbilityType.ShadowClone   => "Shadow Clone",
             AbilityType.GlitchBomb    => "Glitch Bomb",
             AbilityType.Fireball      => "Fireball",
