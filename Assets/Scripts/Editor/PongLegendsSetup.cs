@@ -55,7 +55,7 @@ namespace PongLegends.Editor
                                              float heightMult)
         {
             string path = $"{CharactersPath}/{fileName}.asset";
-            if (File.Exists(path)) return;
+            if (AssetDatabase.LoadAssetAtPath<CharacterDefinition>(path) != null) return;
 
             var def = ScriptableObject.CreateInstance<CharacterDefinition>();
             def.characterName         = charName;
@@ -257,7 +257,7 @@ namespace PongLegends.Editor
             var promptTxt = MakeText(overlayGO.transform, "Prompt", "Press ENTER to return",
                 new Vector2(0, -120), new Vector2(600, 36), 26, Color.white, FontStyles.Normal);
 
-            SetField(overlay, "panel",      overlayGO as GameObject);
+            SetField(overlay, "panel",      overlayGO);
             SetField(overlay, "resultText", resultTxt);
             SetField(overlay, "nameText",   nameTxt);
             SetField(overlay, "promptText", promptTxt);
@@ -319,12 +319,22 @@ namespace PongLegends.Editor
                 System.Reflection.BindingFlags.NonPublic |
                 System.Reflection.BindingFlags.Public |
                 System.Reflection.BindingFlags.Instance);
-            field?.SetValue(target, value);
+
+            if (field == null)
+            {
+                Debug.LogError($"SetField: field '{fieldName}' not found on {target.GetType().Name}");
+                return;
+            }
+
+            field.SetValue(target, value);
         }
 
         private static SessionData LoadSessionData()
         {
-            return AssetDatabase.LoadAssetAtPath<SessionData>($"{SOPath}/SessionData.asset");
+            var sd = AssetDatabase.LoadAssetAtPath<SessionData>($"{SOPath}/SessionData.asset");
+            if (sd == null)
+                Debug.LogError("Pong Legends: SessionData not found — run step 1 (Create All Assets) first.");
+            return sd;
         }
 
         private static CharacterDefinition[] LoadAllCharacters()
@@ -333,23 +343,30 @@ namespace PongLegends.Editor
                                "ShadowPong", "PixelPong", "InfernoPong", "FrostPong" };
             var defs = new CharacterDefinition[names.Length];
             for (int i = 0; i < names.Length; i++)
+            {
                 defs[i] = AssetDatabase.LoadAssetAtPath<CharacterDefinition>($"{CharactersPath}/{names[i]}.asset");
+                if (defs[i] == null)
+                    Debug.LogError($"Pong Legends: CharacterDefinition '{names[i]}' not found — run step 1 (Create All Assets) first.");
+            }
             return defs;
         }
 
         private static void EnsureFolder(string path)
         {
-            if (!AssetDatabase.IsValidFolder(path))
-            {
-                string parent = Path.GetDirectoryName(path).Replace('\\', '/');
-                string folder = Path.GetFileName(path);
-                AssetDatabase.CreateFolder(parent, folder);
-            }
+            if (AssetDatabase.IsValidFolder(path)) return;
+
+            string parent = Path.GetDirectoryName(path).Replace('\\', '/');
+            string folder = Path.GetFileName(path);
+            string guid   = AssetDatabase.CreateFolder(parent, folder);
+
+            if (string.IsNullOrEmpty(guid))
+                throw new IOException($"Failed to create folder: {path}");
         }
 
         private static Color HexColor(string hex)
         {
-            ColorUtility.TryParseHtmlString("#" + hex, out Color c);
+            if (!ColorUtility.TryParseHtmlString("#" + hex, out Color c))
+                Debug.LogError($"HexColor: invalid hex value '{hex}'");
             return c;
         }
 
