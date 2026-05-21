@@ -78,10 +78,10 @@ namespace PongLegends
             float  xDir      = side == PaddleSide.Player ? 1f            : -1f;
 
             var (onHitBall, onHitPaddle) = BuildEffect(def.abilityType);
-            var (speed, size)            = ProjectileProps(def.abilityType);
+            float speed                  = ProjectileSpeed(def.abilityType);
 
             SpawnProjectile(ownPaddle, oppPaddle, xDir, def.accentColor,
-                            onHitBall, onHitPaddle, speed, size,
+                            onHitBall, onHitPaddle, speed, def.abilityType,
                             () => _abilityActive[idx] = false);
         }
 
@@ -143,15 +143,15 @@ namespace PongLegends
             }
         }
 
-        private static (float speed, float size) ProjectileProps(AbilityType type) => type switch
+        private static float ProjectileSpeed(AbilityType type) => type switch
         {
-            AbilityType.CoolWave      => (3f, 0.20f),
-            AbilityType.LightningBolt => (9f, 0.12f),
-            AbilityType.IronShell     => (3f, 0.30f),
-            AbilityType.GlitchBomb    => (5f, 0.18f),
-            AbilityType.Fireball      => (7f, 0.18f),
-            AbilityType.IceShot       => (5f, 0.16f),
-            _                         => (5f, 0.16f)
+            AbilityType.CoolWave      => 3f,
+            AbilityType.LightningBolt => 9f,
+            AbilityType.IronShell     => 3f,
+            AbilityType.GlitchBomb    => 5f,
+            AbilityType.Fireball      => 7f,
+            AbilityType.IceShot       => 5f,
+            _                         => 5f
         };
 
         // ── Uppercut ─────────────────────────────────────────────────────────────
@@ -231,18 +231,85 @@ namespace PongLegends
 
         private void SpawnProjectile(Paddle from, Paddle target, float xDir, Color color,
                                      Action<Ball> onHitBall, Action<Paddle> onHitPaddle,
-                                     float speed, float size, Action onDestroyed)
+                                     float speed, AbilityType type, Action onDestroyed)
         {
             var go = new GameObject("Projectile");
-            go.transform.position   = from.transform.position;
-            go.transform.localScale = new Vector3(size, size, 1f);
-            var sr = go.AddComponent<SpriteRenderer>();
-            sr.sprite       = SpriteFactory.Square;
-            sr.color        = color;
-            sr.sortingOrder = 3;
+            go.transform.position = from.transform.position;
+            BuildProjectileVisual(go, type, color, xDir);
             var proj = go.AddComponent<Projectile>();
             proj.Initialize(_ball, target, new Vector2(xDir * speed, 0f),
                             onHitBall, onHitPaddle, onDestroyed);
+        }
+
+        // ── Projectile visuals ───────────────────────────────────────────────────
+
+        private static void BuildProjectileVisual(GameObject root, AbilityType type, Color accent, float xDir)
+        {
+            Sprite sq = SpriteFactory.Square;
+            switch (type)
+            {
+                case AbilityType.CoolWave:
+                    // Golden ki-blast orb: two overlapping squares at 0° and 45° → star shape
+                    AddChild(root, sq, accent,                        Vector3.zero, new Vector3(0.28f, 0.28f, 1f), 3,  0f);
+                    AddChild(root, sq, accent,                        Vector3.zero, new Vector3(0.28f, 0.28f, 1f), 3, 45f);
+                    AddChild(root, sq, new Color(1f, 1f, 0.7f, 0.9f),Vector3.zero, new Vector3(0.12f, 0.12f, 1f), 4,  0f);
+                    break;
+
+                case AbilityType.LightningBolt:
+                    // Zigzag bolt: two diagonal bars + bright centre flash
+                    AddChild(root, sq, accent, new Vector3( 0.07f * xDir,  0.07f, 0f), new Vector3(0.22f, 0.06f, 1f), 3,  45f);
+                    AddChild(root, sq, accent, new Vector3(-0.07f * xDir, -0.07f, 0f), new Vector3(0.22f, 0.06f, 1f), 3, -45f);
+                    AddChild(root, sq, new Color(1f, 1f, 1f, 0.9f), Vector3.zero,      new Vector3(0.08f, 0.08f, 1f), 4,   0f);
+                    break;
+
+                case AbilityType.IronShell:
+                    // Cannonball: large body + highlight + dark leading edge
+                    AddChild(root, sq, new Color(0.35f, 0.35f, 0.35f, 1f), Vector3.zero,                           new Vector3(0.34f, 0.34f, 1f), 3,  0f);
+                    AddChild(root, sq, new Color(0.75f, 0.75f, 0.75f, 1f), new Vector3(-0.07f,  0.07f, 0f),        new Vector3(0.12f, 0.12f, 1f), 4,  0f);
+                    AddChild(root, sq, new Color(0.10f, 0.10f, 0.10f, 1f), new Vector3( 0.08f * xDir, 0f, 0f),    new Vector3(0.10f, 0.34f, 1f), 4,  0f);
+                    break;
+
+                case AbilityType.GlitchBomb:
+                    // Scattered pixel cluster in green/white/black
+                    AddChild(root, sq, accent,                         Vector3.zero,                    new Vector3(0.14f, 0.14f, 1f), 3,  0f);
+                    AddChild(root, sq, Color.white,                    new Vector3( 0.12f,  0.10f, 0f), new Vector3(0.08f, 0.08f, 1f), 3,  0f);
+                    AddChild(root, sq, Color.black,                    new Vector3(-0.10f,  0.12f, 0f), new Vector3(0.07f, 0.07f, 1f), 4,  0f);
+                    AddChild(root, sq, accent,                         new Vector3( 0.10f, -0.12f, 0f), new Vector3(0.07f, 0.07f, 1f), 3,  0f);
+                    AddChild(root, sq, Color.white,                    new Vector3(-0.12f, -0.10f, 0f), new Vector3(0.06f, 0.06f, 1f), 3, 45f);
+                    break;
+
+                case AbilityType.Fireball:
+                    // Core + tapering flame trail behind
+                    AddChild(root, sq, new Color(1f, 0.35f, 0f, 1f),  Vector3.zero,                               new Vector3(0.26f, 0.26f, 1f), 3, 45f);
+                    AddChild(root, sq, new Color(1f, 0.80f, 0f, 1f),  Vector3.zero,                               new Vector3(0.16f, 0.16f, 1f), 4,  0f);
+                    AddChild(root, sq, new Color(1f, 0.45f, 0f, 0.8f),new Vector3(-0.20f * xDir,  0f,    0f),     new Vector3(0.16f, 0.20f, 1f), 3,  0f);
+                    AddChild(root, sq, new Color(1f, 0.75f, 0f, 0.6f),new Vector3(-0.32f * xDir,  0.05f, 0f),    new Vector3(0.08f, 0.12f, 1f), 3,  0f);
+                    AddChild(root, sq, new Color(1f, 0.75f, 0f, 0.6f),new Vector3(-0.32f * xDir, -0.05f, 0f),    new Vector3(0.08f, 0.12f, 1f), 3,  0f);
+                    break;
+
+                case AbilityType.IceShot:
+                    // Diamond (rotated square) + forward and side spikes
+                    AddChild(root, sq, accent,                         Vector3.zero,                             new Vector3(0.24f, 0.24f, 1f), 3, 45f);
+                    AddChild(root, sq, new Color(1f, 1f, 1f, 0.8f),   Vector3.zero,                             new Vector3(0.12f, 0.12f, 1f), 4, 45f);
+                    AddChild(root, sq, accent,                         new Vector3( 0.18f * xDir, 0f,     0f),  new Vector3(0.18f, 0.05f, 1f), 3,  0f);
+                    AddChild(root, sq, accent,                         new Vector3( 0f,           0.16f,  0f),  new Vector3(0.05f, 0.18f, 1f), 3,  0f);
+                    AddChild(root, sq, accent,                         new Vector3( 0f,          -0.16f,  0f),  new Vector3(0.05f, 0.18f, 1f), 3,  0f);
+                    break;
+            }
+        }
+
+        private static void AddChild(GameObject parent, Sprite sprite, Color color,
+                                     Vector3 localPos, Vector3 localScale, int sortOrder, float zRot = 0f)
+        {
+            var go = new GameObject("v");
+            go.transform.SetParent(parent.transform, false);
+            go.transform.localPosition = localPos;
+            go.transform.localScale    = localScale;
+            if (zRot != 0f) go.transform.localRotation = Quaternion.Euler(0f, 0f, zRot);
+            var sr        = go.AddComponent<SpriteRenderer>();
+            sr.sprite       = sprite;
+            sr.color        = color;
+            sr.sortingOrder = sortOrder;
         }
     }
 }
