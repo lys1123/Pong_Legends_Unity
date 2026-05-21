@@ -205,6 +205,18 @@ namespace PongLegends
                 _inPlay = false;
                 OnScore?.Invoke(PaddleSide.Player);
             }
+            // Guardrail: ball crossed behind a paddle's back edge (e.g. teleported there by an ability).
+            // Award the point without waiting for the wall so the game never gets stuck.
+            else if (playerPaddle != null && x < playerPaddle.GetBounds().min.x)
+            {
+                _inPlay = false;
+                OnScore?.Invoke(PaddleSide.AI);
+            }
+            else if (aiPaddle != null && x > aiPaddle.GetBounds().max.x)
+            {
+                _inPlay = false;
+                OnScore?.Invoke(PaddleSide.Player);
+            }
         }
 
         // --- Ability API ---
