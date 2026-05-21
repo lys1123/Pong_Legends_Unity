@@ -28,12 +28,12 @@ namespace PongLegends
 
             if (resultText != null)
             {
-                resultText.text  = playerWon ? "VICTORY" : "DEFEAT";
-                resultText.color = playerWon ? new Color(1f, 0.84f, 0f) : Color.red;
+                resultText.text  = $"{winnerName} Wins!".ToUpper();
+                resultText.color = new Color(1f, 0.84f, 0f);
             }
 
             if (nameText != null)
-                nameText.text = winnerName.ToUpper();
+                nameText.gameObject.SetActive(false);
 
             StartCoroutine(FlashPrompt());
         }

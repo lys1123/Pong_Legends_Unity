@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.UI;
 
 namespace PongLegends
 {
@@ -17,6 +18,7 @@ namespace PongLegends
         private readonly int[]  _ghostCount    = new int[2];
 
         private float _aiCooldown;
+        private bool  _flashActive;
         private const float AICooldownMin = 3f;
         private const float AICooldownMax = 6f;
 
@@ -36,11 +38,14 @@ namespace PongLegends
             if (kb != null && kb.spaceKey.wasPressedThisFrame)
                 Activate(PaddleSide.Player);
 
-            _aiCooldown -= Time.deltaTime;
-            if (_aiCooldown <= 0f)
+            if (!_flashActive)
             {
-                Activate(PaddleSide.AI);
-                ResetAICooldown();
+                _aiCooldown -= Time.deltaTime;
+                if (_aiCooldown <= 0f)
+                {
+                    Activate(PaddleSide.AI);
+                    ResetAICooldown();
+                }
             }
         }
 
@@ -73,6 +78,12 @@ namespace PongLegends
                 return;
             }
 
+            if (def.abilityType == AbilityType.Paparazzi)
+            {
+                ExecutePaparazzi(side);
+                return;
+            }
+
             Paddle ownPaddle = side == PaddleSide.Player ? _playerPaddle : _aiPaddle;
             Paddle oppPaddle = side == PaddleSide.Player ? _aiPaddle     : _playerPaddle;
             float  xDir      = side == PaddleSide.Player ? 1f            : -1f;
@@ -91,12 +102,6 @@ namespace PongLegends
         {
             switch (type)
             {
-                case AbilityType.CoolWave:
-                    return (
-                        ball   => StartCoroutine(ball.SlowCoroutine(0.5f, 2f)),
-                        paddle => StartCoroutine(paddle.SlowCoroutine(2f))
-                    );
-
                 case AbilityType.LightningBolt:
                     return (
                         ball => ball.Teleport(new Vector2(
@@ -145,7 +150,6 @@ namespace PongLegends
 
         private static float ProjectileSpeed(AbilityType type) => type switch
         {
-            AbilityType.CoolWave      => 3f,
             AbilityType.LightningBolt => 9f,
             AbilityType.IronShell     => 3f,
             AbilityType.GlitchBomb    => 5f,
@@ -153,6 +157,109 @@ namespace PongLegends
             AbilityType.IceShot       => 5f,
             _                         => 5f
         };
+
+        // ── Paparazzi ────────────────────────────────────────────────────────────
+
+        private void ExecutePaparazzi(PaddleSide side)
+        {
+            StartCoroutine(RunPaparazzi((int)side));
+        }
+
+        private static readonly WaitForSeconds _waitCameraPhase = new(1f);
+
+        private IEnumerator RunPaparazzi(int idx)
+        {
+            GameObject[] cameras = SpawnCornerCameras();
+
+            yield return _waitCameraPhase;
+
+            foreach (var cam in cameras)
+                Destroy(cam);
+
+            _flashActive = true;
+            StartCoroutine(_aiPaddle.SilentFreezeCoroutine(0.5f));
+
+            yield return StartCoroutine(StrobeFlash(FindAnyObjectByType<Canvas>()));
+
+            _flashActive        = false;
+            _abilityActive[idx] = false;
+        }
+
+        private static readonly Color        _flashWhite         = Color.white;
+        private static readonly Color        _flashYellow        = new(1f, 0.95f, 0.55f);
+        private static readonly Color        _flashClear         = Color.clear;
+        private static readonly WaitForSeconds _waitFlashFallback = new(0.5f);
+
+        private IEnumerator StrobeFlash(Canvas canvas)
+        {
+            if (canvas == null) { yield return _waitFlashFallback; yield break; }
+
+            var go = new GameObject("FlashOverlay");
+            go.transform.SetParent(canvas.transform, false);
+            var rect = go.AddComponent<RectTransform>();
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
+            var img = go.AddComponent<Image>();
+
+            // Pattern totals exactly 0.50 s
+            (Color col, float dur)[] pattern =
+            {
+                (_flashWhite,  0.08f),
+                (_flashClear,  0.04f),
+                (_flashYellow, 0.07f),
+                (_flashClear,  0.04f),
+                (_flashWhite,  0.08f),
+                (_flashClear,  0.04f),
+                (_flashYellow, 0.06f),
+                (_flashClear,  0.03f),
+                (_flashWhite,  0.06f),
+            };
+
+            foreach (var (col, dur) in pattern)
+            {
+                img.color = col;
+                yield return new WaitForSeconds(dur);
+            }
+
+            Destroy(go);
+        }
+
+        private static GameObject[] SpawnCornerCameras()
+        {
+            Sprite camSprite = Resources.Load<Sprite>("PaparazziCamera");
+            if (camSprite == null)
+                Debug.LogWarning("Paparazzi: sprite not found — place PaparazziCamera.png in Assets/Resources/ and set Texture Type to Sprite.");
+
+            float cx = Ball.WorldHalfWidth  - 0.5f;
+            float cy = Ball.WorldHalfHeight - 0.45f;
+            Vector2[] positions = {
+                new(-cx,  cy), new( cx,  cy),
+                new(-cx, -cy), new( cx, -cy)
+            };
+
+            var cameras = new GameObject[4];
+            for (int i = 0; i < 4; i++)
+            {
+                var go = new GameObject("PaparazziCamera");
+                go.transform.position = new Vector3(positions[i].x, positions[i].y, 0f);
+
+                var sr = go.AddComponent<SpriteRenderer>();
+                sr.sprite       = camSprite;
+                sr.sortingOrder = 3;
+
+                if (camSprite != null)
+                {
+                    float baseScale = 0.9f / camSprite.bounds.size.x;
+                    float xScale    = positions[i].x > 0 ? -baseScale : baseScale;
+                    go.transform.localScale = new Vector3(xScale, baseScale, 1f);
+                }
+
+                cameras[i] = go;
+            }
+            return cameras;
+        }
 
         // ── Uppercut ─────────────────────────────────────────────────────────────
 
@@ -248,13 +355,6 @@ namespace PongLegends
             Sprite sq = SpriteFactory.Square;
             switch (type)
             {
-                case AbilityType.CoolWave:
-                    // Golden ki-blast orb: two overlapping squares at 0° and 45° → star shape
-                    AddChild(root, sq, accent,                        Vector3.zero, new Vector3(0.28f, 0.28f, 1f), 3,  0f);
-                    AddChild(root, sq, accent,                        Vector3.zero, new Vector3(0.28f, 0.28f, 1f), 3, 45f);
-                    AddChild(root, sq, new Color(1f, 1f, 0.7f, 0.9f),Vector3.zero, new Vector3(0.12f, 0.12f, 1f), 4,  0f);
-                    break;
-
                 case AbilityType.LightningBolt:
                     // Zigzag bolt: two diagonal bars + bright centre flash
                     AddChild(root, sq, accent, new Vector3( 0.07f * xDir,  0.07f, 0f), new Vector3(0.22f, 0.06f, 1f), 3,  45f);

@@ -113,6 +113,13 @@ namespace PongLegends
             _isFrozen = false;
         }
 
+        public IEnumerator SilentFreezeCoroutine(float duration)
+        {
+            _isFrozen = true;
+            yield return new WaitForSeconds(duration);
+            _isFrozen = false;
+        }
+
         // Shrinks (or grows) the paddle by multiplier for duration, then restores.
         public IEnumerator ShrinkCoroutine(float multiplier, float duration)
         {

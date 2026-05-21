@@ -14,6 +14,7 @@ namespace PongLegends
         [SerializeField] private ScoreManager scoreManager;
         [SerializeField] private AbilitySystem abilitySystem;
         [SerializeField] private TMPro.TextMeshProUGUI scoreBannerText;
+        [SerializeField] private TMPro.TextMeshProUGUI instructionsText;
 
         private bool _gameOver;
 
@@ -44,6 +45,9 @@ namespace PongLegends
 
             scoreManager.Initialize(playerDef.characterName, aiDef.characterName);
             abilitySystem.Initialize(sessionData, ball, playerPaddle, aiPaddle);
+
+            if (instructionsText != null)
+                instructionsText.text = $"↑↓ to move  •  A/S/D for kicks  •  SPACE for \"{playerDef.abilityType.DisplayName()}\"  •  ESC to quit";
 
             ball.OnScore    += HandleScore;
             scoreManager.OnGameOver += _ => HandleGameOver();

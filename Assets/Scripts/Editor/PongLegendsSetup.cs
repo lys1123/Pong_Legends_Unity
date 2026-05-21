@@ -1,5 +1,5 @@
 // Editor-only script — lives in an Editor/ folder so it is stripped from builds.
-// Menu: Pong Legends → 1. Create Assets  →  2. Setup CharacterSelect Scene  →  3. Setup Game Scene
+// Menu: Pong Legends → 1. Create Assets  →  2. Setup CharacterSelect Scene  →  3. Setup Game Scene  →  4. Configure Sprites
 // Run them in order the first time you open the project.
 
 using System.IO;
@@ -27,7 +27,7 @@ namespace PongLegends.Editor
             EnsureFolder("Assets/ScriptableObjects");
             EnsureFolder(CharactersPath);
 
-            CreateCharacter("JohnnyPong",   "Johnny Pong",   HexColor("D2691E"), HexColor("FFD700"), AbilityType.CoolWave,      VisualFeature.Sunglasses,  1.0f);
+            CreateCharacter("JohnnyPong",   "Johnny Pong",   HexColor("D2691E"), HexColor("FFD700"), AbilityType.Paparazzi,      VisualFeature.Sunglasses,  1.0f);
             CreateCharacter("RyuPong",      "Ryu Pong",      HexColor("FFFFFF"), HexColor("FF0000"), AbilityType.Uppercut,      VisualFeature.Headband,    1.0f);
             CreateCharacter("TelePong",     "Tele-Pong",     HexColor("FFFF00"), HexColor("00FFFF"), AbilityType.LightningBolt, VisualFeature.Electric,    1.0f);
             CreateCharacter("TankPong",     "Tank Pong",     HexColor("808080"), HexColor("556B2F"), AbilityType.IronShell,     VisualFeature.Armor,       1.2f);
@@ -158,11 +158,6 @@ namespace PongLegends.Editor
             EnsureFolder("Assets/Scenes");
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
-            // EventSystem (required for UI pointer events)
-            var esGO = new GameObject("EventSystem");
-            esGO.AddComponent<EventSystem>();
-            esGO.AddComponent<InputSystemUIInputModule>();
-
             // Camera
             var camGO = new GameObject("Main Camera");
             var cam   = camGO.AddComponent<Camera>();
@@ -232,8 +227,8 @@ namespace PongLegends.Editor
                 new Color(1f, 0.84f, 0f), FontStyles.Bold);
             bannerTxt.gameObject.SetActive(false);
 
-            // Instructions
-            MakeText(canvasGO.transform, "Instructions",
+            // Instructions — text is updated at runtime by GameplayManager with the selected ability name
+            var instructionsTxt = MakeText(canvasGO.transform, "Instructions",
                 "↑↓ to move  •  A/S/D for kicks  •  SPACE for special  •  ESC to quit",
                 new Vector2(0, -330), new Vector2(900, 26), 18,
                 new Color(0.6f, 0.6f, 0.6f), FontStyles.Normal);
@@ -286,11 +281,38 @@ namespace PongLegends.Editor
             SetField(gm, "aiPaddle",        aiPaddle);
             SetField(gm, "scoreManager",    scoreMgr);
             SetField(gm, "abilitySystem",   abilitySys);
-            SetField(gm, "scoreBannerText", bannerTxt);
+            SetField(gm, "scoreBannerText",   bannerTxt);
+            SetField(gm, "instructionsText", instructionsTxt);
 
             EditorSceneManager.SaveScene(scene, "Assets/Scenes/Game.unity");
             Debug.Log("Pong Legends: Game scene created at Assets/Scenes/Game.unity");
             AddSceneToBuildSettings("Assets/Scenes/Game.unity");
+        }
+
+        // ─── Step 4: Sprite imports ────────────────────────────────────────────
+
+        [MenuItem("Pong Legends/4. Configure Sprites")]
+        public static void ConfigureSprites()
+        {
+            ConfigureSprite("Assets/Resources/PaparazziCamera.png");
+            AssetDatabase.Refresh();
+            Debug.Log("Pong Legends: Sprite import settings applied.");
+        }
+
+        private static void ConfigureSprite(string path)
+        {
+            var importer = AssetImporter.GetAtPath(path) as TextureImporter;
+            if (importer == null)
+            {
+                Debug.LogError($"Sprite not found at {path}");
+                return;
+            }
+            importer.textureType         = TextureImporterType.Sprite;
+            importer.spriteImportMode    = SpriteImportMode.Single;
+            importer.alphaIsTransparency = true;
+            importer.filterMode          = FilterMode.Point;
+            importer.mipmapEnabled       = false;
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
         }
 
         // ─── Helpers ────────────────────────────────────────────────────────────
