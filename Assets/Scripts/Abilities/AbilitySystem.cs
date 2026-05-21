@@ -174,8 +174,8 @@ namespace PongLegends
             if (!inRange) { _abilityActive[idx] = false; return; }
 
             // Launch at 70° upward toward the opponent at 10× current speed
-            float   launchSpeed = Mathf.Max(_ball.GetVelocity().magnitude, Ball.InitialSpeed) * 10f;
-            float   rad         = 70f * Mathf.Deg2Rad;
+            float   launchSpeed = Mathf.Max(_ball.GetVelocity().magnitude, Ball.InitialSpeed) * 3f;
+            float   rad         = 60f * Mathf.Deg2Rad;
             _ball.SetVelocity(new Vector2(xDir * Mathf.Cos(rad), Mathf.Sin(rad)) * launchSpeed);
 
             _abilityActive[idx] = false; // instant hit — unlocks immediately

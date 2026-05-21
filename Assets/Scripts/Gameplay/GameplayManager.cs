@@ -46,9 +46,17 @@ namespace PongLegends
             abilitySystem.Initialize(sessionData, ball, playerPaddle, aiPaddle);
 
             ball.OnScore    += HandleScore;
-            scoreManager.OnGameOver += _ => _gameOver = true;
+            scoreManager.OnGameOver += _ => HandleGameOver();
 
             StartCoroutine(ServeAfterDelay(1f, PaddleSide.Player));
+        }
+
+        private void HandleGameOver()
+        {
+            _gameOver = true;
+            playerPaddle.enabled  = false;
+            aiPaddle.enabled      = false;
+            abilitySystem.enabled = false;
         }
 
         private void HandleScore(PaddleSide scorer)
