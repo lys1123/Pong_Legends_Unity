@@ -242,7 +242,10 @@ namespace PongLegends
             _velocity = Vector2.zero;
             SetColor(Color.cyan);
             yield return new WaitForSeconds(duration);
-            _velocity = saved;
+            // Only restore if we froze a moving ball — a zero saved means we stacked
+            // onto an already-frozen ball and must not wipe the first freeze's restore.
+            if (saved.sqrMagnitude > 0.01f)
+                _velocity = saved;
             SetColor(Color.white);
         }
 

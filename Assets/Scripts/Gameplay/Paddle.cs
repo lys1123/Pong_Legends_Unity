@@ -94,7 +94,13 @@ namespace PongLegends
             if (target == null) return 0f;
             float diff = target.position.y - transform.position.y;
             if (Mathf.Abs(diff) < AIDeadZone) return 0f;
-            return Mathf.Sign(diff) * AISpeed;
+
+            // Scale tracking speed with vertical ball velocity so extremely steep fast shots
+            // (e.g. Uppercut) aren't completely undefendable. Has no effect during normal
+            // play where |vy| stays under MaxSpeed.
+            float vy = ball != null ? Mathf.Abs(ball.GetVelocity().y) : 0f;
+            float speedScale = Mathf.Clamp(vy / Ball.MaxSpeed, 1f, 1.8f);
+            return Mathf.Sign(diff) * AISpeed * speedScale;
         }
 
         public Bounds GetBounds() => _renderer.bounds;

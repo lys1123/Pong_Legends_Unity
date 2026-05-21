@@ -159,10 +159,9 @@ namespace PongLegends
         private static float ProjectileSpeed(AbilityType type) => type switch
         {
             AbilityType.LightningBolt => 9f,
-            AbilityType.IronShell     => 3f,
-            AbilityType.GlitchBomb    => 5f,
+            AbilityType.GlitchBomb    => 6f,
             AbilityType.Fireball      => 7f,
-            AbilityType.IceShot       => 5f,
+            AbilityType.IceShot       => 7f,
             _                         => 5f
         };
 
@@ -185,7 +184,8 @@ namespace PongLegends
                 Destroy(cam);
 
             _flashActive = true;
-            StartCoroutine(_aiPaddle.SilentFreezeCoroutine(0.5f));
+            Paddle opponent = idx == (int)PaddleSide.Player ? _aiPaddle : _playerPaddle;
+            StartCoroutine(opponent.SilentFreezeCoroutine(0.5f));
 
             yield return StartCoroutine(StrobeFlash(FindAnyObjectByType<Canvas>()));
 
@@ -320,17 +320,21 @@ namespace PongLegends
             Paddle ownPaddle = side == PaddleSide.Player ? _playerPaddle : _aiPaddle;
             float  xDir      = side == PaddleSide.Player ? 1f : -1f;
 
-            // Ball must be within striking range: 2 units horizontally, paddle half-height + 1 vertically
-            Vector2 ballPos  = _ball.transform.position;
-            float   paddleHalfH = ownPaddle.GetBounds().size.y * 0.5f;
-            bool    inRange  = Mathf.Abs(ballPos.x - ownPaddle.transform.position.x) < 2f
-                            && Mathf.Abs(ballPos.y - ownPaddle.transform.position.y) < paddleHalfH + 1f;
+            // Ball must be within kick range: paddle bounds expanded by a small buffer,
+            // matching the contact zone where A/S/D kicks would apply.
+            const float UppercutBuffer = 0.35f;
+            Vector2 ballPos = _ball.transform.position;
+            Bounds  pb      = ownPaddle.GetBounds();
+            bool    inRange = ballPos.x + Ball.Radius > pb.min.x - UppercutBuffer
+                           && ballPos.x - Ball.Radius < pb.max.x + UppercutBuffer
+                           && ballPos.y + Ball.Radius > pb.min.y - UppercutBuffer
+                           && ballPos.y - Ball.Radius < pb.max.y + UppercutBuffer;
 
             if (!inRange) { _abilityActive[idx] = false; return; }
 
-            // Launch at 70° upward toward the opponent at 10× current speed
-            float   launchSpeed = Mathf.Max(_ball.GetVelocity().magnitude, Ball.InitialSpeed) * 3f;
-            float   rad         = 60f * Mathf.Deg2Rad;
+            // Launch at 45° upward at 2× current speed — powerful but readable enough to defend.
+            float   launchSpeed = Mathf.Max(_ball.GetVelocity().magnitude, Ball.InitialSpeed) * 2f;
+            float   rad         = 45f * Mathf.Deg2Rad;
             _ball.SetVelocity(new Vector2(xDir * Mathf.Cos(rad), Mathf.Sin(rad)) * launchSpeed);
 
             _abilityActive[idx] = false; // instant hit — unlocks immediately
