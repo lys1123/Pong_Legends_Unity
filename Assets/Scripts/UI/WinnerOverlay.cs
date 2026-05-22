@@ -20,6 +20,7 @@ namespace PongLegends
         {
             _showing = true;
             panel?.SetActive(true);
+            SoundManager.Play("game_over");
 
             if (resultText != null)
             {

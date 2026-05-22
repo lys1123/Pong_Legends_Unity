@@ -50,6 +50,7 @@ namespace PongLegends
                 instructionsText.text = $"↑↓ to move  •  A/S/D for kicks  •  SPACE for \"{playerDef.abilityType.DisplayName()}\"  •  ESC to quit";
 
             ball.OnScore    += HandleScore;
+            ball.OnPaddleHit += _ => SoundManager.Play("hit_paddle");
             scoreManager.OnGameOver += _ => HandleGameOver();
 
             StartCoroutine(ServeAfterDelay(1f, PaddleSide.Player));
@@ -65,6 +66,7 @@ namespace PongLegends
 
         private void HandleScore(PaddleSide scorer)
         {
+            SoundManager.Play("point");
             scoreManager.HandleScore(scorer);
             if (!scoreManager.IsGameOver)
             {

@@ -66,6 +66,7 @@ namespace PongLegends
             // IronDefense bypasses the cooldown lock — reactivation replaces the existing shield
             if (def.abilityType == AbilityType.IronShell)
             {
+                SoundManager.Play("ability_ironshield");
                 ExecuteIronDefense(side);
                 return;
             }
@@ -76,21 +77,26 @@ namespace PongLegends
             if (def.abilityType == AbilityType.ShadowClone)
             {
                 if (!_ball.IsInPlay()) { _abilityActive[idx] = false; return; }
+                SoundManager.Play("ability_shadowclone");
                 SpawnClones(side);
                 return;
             }
 
             if (def.abilityType == AbilityType.Uppercut)
             {
-                ExecuteUppercut(side);
+                ExecuteUppercut(side); // sound plays inside after range check
                 return;
             }
 
             if (def.abilityType == AbilityType.Paparazzi)
             {
+                SoundManager.Play("ability_paparazzi");
                 ExecutePaparazzi(side);
                 return;
             }
+
+            // Projectile abilities
+            SoundManager.Play(AbilitySoundName(def.abilityType));
 
             Paddle ownPaddle = side == PaddleSide.Player ? _playerPaddle : _aiPaddle;
             Paddle oppPaddle = side == PaddleSide.Player ? _aiPaddle     : _playerPaddle;
@@ -155,6 +161,15 @@ namespace PongLegends
                     return (null, null);
             }
         }
+
+        private static string AbilitySoundName(AbilityType type) => type switch
+        {
+            AbilityType.LightningBolt => "ability_lightning",
+            AbilityType.GlitchBomb    => "ability_glitch",
+            AbilityType.Fireball      => "ability_fireball",
+            AbilityType.IceShot       => "ability_ice",
+            _                         => null
+        };
 
         private static float ProjectileSpeed(AbilityType type) => type switch
         {
@@ -331,6 +346,8 @@ namespace PongLegends
                            && ballPos.y - Ball.Radius < pb.max.y + UppercutBuffer;
 
             if (!inRange) { _abilityActive[idx] = false; return; }
+
+            SoundManager.Play("ability_uppercut");
 
             // Launch at 45° upward at 2× current speed — powerful but readable enough to defend.
             float   launchSpeed = Mathf.Max(_ball.GetVelocity().magnitude, Ball.InitialSpeed) * 2f;

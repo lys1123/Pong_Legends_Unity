@@ -77,11 +77,13 @@ namespace PongLegends
             {
                 _velocity.y = -Mathf.Abs(_velocity.y);
                 transform.position = new Vector3(pos.x, WorldHalfHeight - Radius, 0f);
+                SoundManager.Play("hit_wall");
             }
             else if (pos.y - Radius <= -WorldHalfHeight)
             {
                 _velocity.y = Mathf.Abs(_velocity.y);
                 transform.position = new Vector3(pos.x, -WorldHalfHeight + Radius, 0f);
+                SoundManager.Play("hit_wall");
             }
         }
 
