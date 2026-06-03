@@ -5,8 +5,10 @@
 using System.IO;
 using TMPro;
 using UnityEditor;
+using UnityEditor.Events;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
 using UnityEngine.SceneManagement;
@@ -403,6 +405,285 @@ namespace PongLegends.Editor
                 new EditorBuildSettingsScene(scenePath, true)
             };
             EditorBuildSettings.scenes = list.ToArray();
+        }
+
+        private static void AddSceneToBuildSettingsFirst(string scenePath)
+        {
+            var list = new System.Collections.Generic.List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
+            list.RemoveAll(s => s.path == scenePath);
+            list.Insert(0, new EditorBuildSettingsScene(scenePath, true));
+            EditorBuildSettings.scenes = list.ToArray();
+        }
+
+        // ─── Step 5: Lobby Scene ────────────────────────────────────────────────
+
+        [MenuItem("Pong Legends/5. Setup Lobby Scene")]
+        public static void SetupLobbyScene()
+        {
+            EnsureFolder("Assets/Scenes");
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+
+            // Camera
+            var camGO = new GameObject("Main Camera");
+            var cam   = camGO.AddComponent<Camera>();
+            cam.orthographic     = true;
+            cam.orthographicSize = 3.6f;
+            cam.backgroundColor  = new Color(0.05f, 0.05f, 0.1f);
+            cam.clearFlags       = CameraClearFlags.SolidColor;
+            camGO.tag            = "MainCamera";
+
+            // EventSystem
+            var esGO = new GameObject("EventSystem");
+            esGO.AddComponent<EventSystem>();
+            esGO.AddComponent<InputSystemUIInputModule>();
+
+            // NetworkManager (LobbyManager will also create one if missing, but pre-placing it is cleaner)
+            new GameObject("NetworkManager").AddComponent<NetworkManager>();
+
+            // Canvas
+            var canvasGO = new GameObject("Canvas");
+            var canvas   = canvasGO.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            var scaler = canvasGO.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode         = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1280, 720);
+            canvasGO.AddComponent<GraphicRaycaster>();
+
+            // Global title — always visible behind all panels
+            MakeText(canvasGO.transform, "Title", "PONG LEGENDS",
+                new Vector2(0, 300), new Vector2(700, 80), 60,
+                new Color(1f, 0.84f, 0f), FontStyles.Bold);
+
+            // ── Panel_ModeSelect ─────────────────────────────────────────────
+            var pMode = MakePanel(canvasGO.transform, "Panel_ModeSelect", active: true);
+            MakeText(pMode.transform, "Subtitle", "SELECT GAME MODE",
+                new Vector2(0, 100), new Vector2(500, 40), 26, Color.yellow, FontStyles.Normal);
+            var btnVsAI   = MakeButton(pMode.transform,  "Btn_VsAI",   "PLAY VS AI",
+                new Vector2(0, 10),  new Vector2(340, 75), new Color(0.1f, 0.55f, 0.1f));
+            var btnOnline = MakeButton(pMode.transform,  "Btn_Online", "PLAY ONLINE",
+                new Vector2(0, -90), new Vector2(340, 75), new Color(0.0f, 0.45f, 0.65f));
+
+            // ── Panel_HostJoin ───────────────────────────────────────────────
+            var pHostJoin = MakePanel(canvasGO.transform, "Panel_HostJoin", active: false);
+            MakeText(pHostJoin.transform, "Header", "ONLINE PLAY",
+                new Vector2(0, 215), new Vector2(500, 58), 42,
+                new Color(1f, 0.84f, 0f), FontStyles.Bold);
+            var btnCreate   = MakeButton(pHostJoin.transform, "Btn_Create",   "CREATE GAME",
+                new Vector2(0, 135), new Vector2(320, 68), new Color(0.0f, 0.45f, 0.65f));
+            MakeText(pHostJoin.transform, "OrLabel", "── OR JOIN WITH CODE ──",
+                new Vector2(0, 65), new Vector2(500, 28), 16,
+                new Color(0.5f, 0.5f, 0.5f), FontStyles.Normal);
+            var fldJoin     = MakeInputField(pHostJoin.transform, "InputField_JoinCode",
+                "Enter room code…", new Vector2(0, 5), new Vector2(300, 52));
+            var btnJoin     = MakeButton(pHostJoin.transform, "Btn_Join",     "JOIN GAME",
+                new Vector2(0, -60), new Vector2(300, 62), new Color(0.0f, 0.45f, 0.65f));
+            MakeText(pHostJoin.transform, "SpectateLabel", "── OR SPECTATE ──",
+                new Vector2(0, -128), new Vector2(500, 26), 15,
+                new Color(0.5f, 0.5f, 0.5f), FontStyles.Normal);
+            var fldSpectate = MakeInputField(pHostJoin.transform, "InputField_SpectateCode",
+                "Enter room code…", new Vector2(0, -175), new Vector2(300, 50));
+            var btnSpectate = MakeButton(pHostJoin.transform, "Btn_Spectate", "SPECTATE",
+                new Vector2(0, -238), new Vector2(300, 58), new Color(0.35f, 0.35f, 0.35f));
+            var btnBack     = MakeButton(pHostJoin.transform, "Btn_Back",     "← BACK",
+                new Vector2(0, -315), new Vector2(180, 48), new Color(0.5f, 0.1f, 0.1f));
+
+            // ── Panel_WaitingRoom ────────────────────────────────────────────
+            var pWaiting = MakePanel(canvasGO.transform, "Panel_WaitingRoom", active: false);
+            MakeText(pWaiting.transform, "WRHeader", "WAITING ROOM",
+                new Vector2(0, 290), new Vector2(600, 50), 34,
+                new Color(1f, 0.84f, 0f), FontStyles.Bold);
+            var roomCodeTxt = MakeText(pWaiting.transform, "RoomCodeText", "CODE: ——",
+                new Vector2(0, 252), new Vector2(500, 34), 22, Color.white, FontStyles.Bold);
+            var shareURLTxt = MakeText(pWaiting.transform, "ShareURLText", "",
+                new Vector2(0, 222), new Vector2(820, 26), 14,
+                new Color(0.6f, 0.8f, 1f), FontStyles.Normal);
+            var btnCopyLink = MakeButton(pWaiting.transform, "Btn_CopyLink", "COPY LINK",
+                new Vector2(0, 185), new Vector2(180, 42), new Color(0.2f, 0.2f, 0.4f), 16f);
+            var statusTxt   = MakeText(pWaiting.transform, "StatusText", "",
+                new Vector2(0, 150), new Vector2(700, 30), 18,
+                new Color(0.8f, 0.8f, 0.8f), FontStyles.Normal);
+            MakeText(pWaiting.transform, "PickLabel", "PICK YOUR FIGHTER",
+                new Vector2(0, 115), new Vector2(500, 30), 20, Color.yellow, FontStyles.Bold);
+
+            // Character grid (4×2)
+            var gridGO   = new GameObject("CharacterGrid");
+            gridGO.transform.SetParent(pWaiting.transform, false);
+            var gridRect = gridGO.AddComponent<RectTransform>();
+            gridRect.anchoredPosition = new Vector2(0, -28);
+            gridRect.sizeDelta        = new Vector2(1020, 220);
+            var layout = gridGO.AddComponent<GridLayoutGroup>();
+            layout.cellSize        = new Vector2(235, 200);
+            layout.spacing         = new Vector2(16, 16);
+            layout.constraint      = GridLayoutGroup.Constraint.FixedColumnCount;
+            layout.constraintCount = 4;
+            layout.childAlignment  = TextAnchor.MiddleCenter;
+
+            var slots = new CharacterSlot[8];
+            for (int i = 0; i < 8; i++)
+            {
+                var slotGO = new GameObject($"Slot_{i}");
+                slotGO.transform.SetParent(gridGO.transform, false);
+                var img  = slotGO.AddComponent<Image>();
+                img.color = new Color(0.17f, 0.17f, 0.27f);
+                var slot = slotGO.AddComponent<CharacterSlot>();
+                slots[i] = slot;
+                MakeText(slotGO.transform, "Name", "",
+                    new Vector2(0, -76), new Vector2(220, 28), 15, Color.white, FontStyles.Normal);
+            }
+
+            var btnConfirm = MakeButton(pWaiting.transform, "Btn_Confirm", "CONFIRM",
+                new Vector2(-110, -238), new Vector2(200, 65), new Color(0.1f, 0.55f, 0.1f));
+            var btnCancel  = MakeButton(pWaiting.transform, "Btn_Cancel",  "CANCEL",
+                new Vector2( 110, -238), new Vector2(160, 55), new Color(0.5f, 0.1f, 0.1f));
+
+            // ── LobbyManager ──────────────────────────────────────────────────
+            var lmGO = new GameObject("LobbyManager");
+            var lm   = lmGO.AddComponent<LobbyManager>();
+            SetField(lm, "sessionData",       LoadSessionData());
+            SetField(lm, "allCharacters",     LoadAllCharacters());
+            SetField(lm, "panelModeSelect",   pMode);
+            SetField(lm, "panelHostJoin",     pHostJoin);
+            SetField(lm, "panelWaitingRoom",  pWaiting);
+            SetField(lm, "joinCodeField",     fldJoin);
+            SetField(lm, "spectateCodeField", fldSpectate);
+            SetField(lm, "roomCodeText",      roomCodeTxt);
+            SetField(lm, "shareURLText",      shareURLTxt);
+            SetField(lm, "statusText",        statusTxt);
+            SetField(lm, "slots",             slots);
+
+            // Wire all button onClick events
+            AddButtonListener(btnVsAI,    lm, "PlayOffline");
+            AddButtonListener(btnOnline,  lm, "ShowHostJoinPanel");
+            AddButtonListener(btnCreate,  lm, "CreateRoom");
+            AddButtonListener(btnJoin,    lm, "JoinRoom");
+            AddButtonListener(btnSpectate,lm, "JoinAsSpectator");
+            AddButtonListener(btnBack,    lm, "ShowModePanel");
+            AddButtonListener(btnCopyLink,lm, "CopyLink");
+            AddButtonListener(btnConfirm, lm, "ConfirmCharacter");
+            AddButtonListener(btnCancel,  lm, "LeaveRoom");
+
+            EditorSceneManager.SaveScene(scene, "Assets/Scenes/Lobby.unity");
+            Debug.Log("Pong Legends: Lobby scene created at Assets/Scenes/Lobby.unity");
+            AddSceneToBuildSettingsFirst("Assets/Scenes/Lobby.unity");
+        }
+
+        // ─── UI Helpers ─────────────────────────────────────────────────────────
+
+        // Full-screen panel (stretches to canvas edges). No background image by default —
+        // the camera background shows through so panels feel cohesive.
+        private static GameObject MakePanel(Transform parent, string goName, bool active = true)
+        {
+            var go   = new GameObject(goName);
+            go.transform.SetParent(parent, false);
+            var rect = go.AddComponent<RectTransform>();
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
+            go.SetActive(active);
+            return go;
+        }
+
+        private static Button MakeButton(Transform parent, string goName, string label,
+                                          Vector2 pos, Vector2 size, Color bgColor,
+                                          float fontSize = 22f)
+        {
+            var go   = new GameObject(goName);
+            go.transform.SetParent(parent, false);
+            var rect = go.AddComponent<RectTransform>();
+            rect.anchoredPosition = pos;
+            rect.sizeDelta        = size;
+            var img = go.AddComponent<Image>();
+            img.color = bgColor;
+            var btn = go.AddComponent<Button>();
+
+            // Label
+            var lblGO   = new GameObject("Label");
+            lblGO.transform.SetParent(go.transform, false);
+            var lblRect = lblGO.AddComponent<RectTransform>();
+            lblRect.anchorMin = Vector2.zero;
+            lblRect.anchorMax = Vector2.one;
+            lblRect.offsetMin = Vector2.zero;
+            lblRect.offsetMax = Vector2.zero;
+            var tmp = lblGO.AddComponent<TextMeshProUGUI>();
+            tmp.text      = label;
+            tmp.fontSize  = fontSize;
+            tmp.color     = Color.white;
+            tmp.fontStyle = FontStyles.Bold;
+            tmp.alignment = TextAlignmentOptions.Center;
+
+            return btn;
+        }
+
+        private static TMP_InputField MakeInputField(Transform parent, string goName,
+                                                      string placeholder,
+                                                      Vector2 pos, Vector2 size)
+        {
+            var go   = new GameObject(goName);
+            go.transform.SetParent(parent, false);
+            var rect = go.AddComponent<RectTransform>();
+            rect.anchoredPosition = pos;
+            rect.sizeDelta        = size;
+            var img = go.AddComponent<Image>();
+            img.color = new Color(0.15f, 0.15f, 0.22f);
+            var field = go.AddComponent<TMP_InputField>();
+
+            // Text Area (clips content)
+            var areaGO   = new GameObject("Text Area");
+            areaGO.transform.SetParent(go.transform, false);
+            var areaRect = areaGO.AddComponent<RectTransform>();
+            areaRect.anchorMin = Vector2.zero;
+            areaRect.anchorMax = Vector2.one;
+            areaRect.offsetMin = new Vector2(10, 4);
+            areaRect.offsetMax = new Vector2(-10, -4);
+            areaGO.AddComponent<RectMask2D>();
+
+            // Placeholder
+            var phGO   = new GameObject("Placeholder");
+            phGO.transform.SetParent(areaGO.transform, false);
+            var phRect = phGO.AddComponent<RectTransform>();
+            phRect.anchorMin = Vector2.zero;
+            phRect.anchorMax = Vector2.one;
+            phRect.offsetMin = Vector2.zero;
+            phRect.offsetMax = Vector2.zero;
+            var phTmp = phGO.AddComponent<TextMeshProUGUI>();
+            phTmp.text      = placeholder;
+            phTmp.fontSize  = 17;
+            phTmp.color     = new Color(0.5f, 0.5f, 0.5f);
+            phTmp.alignment = TextAlignmentOptions.MidlineLeft;
+
+            // Text
+            var txtGO   = new GameObject("Text");
+            txtGO.transform.SetParent(areaGO.transform, false);
+            var txtRect = txtGO.AddComponent<RectTransform>();
+            txtRect.anchorMin = Vector2.zero;
+            txtRect.anchorMax = Vector2.one;
+            txtRect.offsetMin = Vector2.zero;
+            txtRect.offsetMax = Vector2.zero;
+            var txtTmp = txtGO.AddComponent<TextMeshProUGUI>();
+            txtTmp.fontSize  = 19;
+            txtTmp.color     = Color.white;
+            txtTmp.alignment = TextAlignmentOptions.MidlineLeft;
+
+            field.textViewport  = areaRect;
+            field.placeholder   = phTmp;
+            field.textComponent = txtTmp;
+
+            return field;
+        }
+
+        // Wires a zero-argument public method on target as a persistent Button.onClick listener.
+        private static void AddButtonListener(Button button, Object target, string methodName)
+        {
+            var method = target.GetType().GetMethod(methodName,
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            if (method == null)
+            {
+                Debug.LogError($"AddButtonListener: method '{methodName}' not found on {target.GetType().Name}");
+                return;
+            }
+            var action = System.Delegate.CreateDelegate(typeof(UnityAction), target, method) as UnityAction;
+            UnityEventTools.AddPersistentListener(button.onClick, action);
         }
     }
 }

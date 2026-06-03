@@ -149,12 +149,7 @@ namespace PongLegends
         public void PlayOffline()
         {
             sessionData.networkMode = NetworkMode.Offline;
-            int aiIndex;
-            do { aiIndex = Random.Range(0, allCharacters.Length); }
-            while (aiIndex == _localCharIdx);
-            sessionData.playerCharacter = allCharacters[_localCharIdx];
-            sessionData.aiCharacter     = allCharacters[aiIndex];
-            SceneManager.LoadScene("Game");
+            SceneManager.LoadScene("CharacterSelect");
         }
 
         public void CreateRoom()
@@ -315,7 +310,7 @@ namespace PongLegends
         [SerializeField] private CharacterSlot[] slots;
         private void Awake() { Instance = this; }
         private void OnDestroy() { if (Instance == this) Instance = null; }
-        public void PlayOffline()       => UnityEngine.SceneManagement.SceneManager.LoadScene("Game");
+        public void PlayOffline()       => UnityEngine.SceneManagement.SceneManager.LoadScene("CharacterSelect");
         public void ShowModePanel()     { }
         public void ShowHostJoinPanel() { }
         public void CreateRoom()        { }
