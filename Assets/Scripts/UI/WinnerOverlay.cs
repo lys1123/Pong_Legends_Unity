@@ -15,6 +15,7 @@ namespace PongLegends
         [SerializeField] private TextMeshProUGUI promptText;
 
         private bool _showing;
+        private bool _suppressInput; // true on client/spectator — host controls navigation
 
         public void Show(bool playerWon, string winnerName)
         {
@@ -45,12 +46,27 @@ namespace PongLegends
             }
         }
 
+        // Called by GameNetworkBridge on client/spectator machines instead of Show().
+        public void ShowFromNetwork(bool p1Won, string winnerName)
+        {
+            _suppressInput = true;
+            Show(p1Won, winnerName);
+        }
+
+        // Called by GameNetworkBridge when host sends ReturnToLobby.
+        public void ReturnToLobby()
+        {
+            _showing = false;
+            SceneManager.LoadScene("Lobby");
+        }
+
         private void Update()
         {
-            if (!_showing) return;
+            if (!_showing || _suppressInput) return;
             var kb = Keyboard.current;
-            if (kb != null && kb.enterKey.wasPressedThisFrame)
-                SceneManager.LoadScene("CharacterSelect");
+            if (kb == null) return;
+            if (kb.enterKey.wasPressedThisFrame)
+                GameNetworkBridge.HandleReturnToLobby();
         }
     }
 }

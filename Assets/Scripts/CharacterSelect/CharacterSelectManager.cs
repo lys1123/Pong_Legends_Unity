@@ -75,8 +75,8 @@ namespace PongLegends
         private void Confirm()
         {
             _confirmed = true;
-
             sessionData.playerCharacter = allCharacters[_selectedIndex];
+            sessionData.networkMode     = NetworkMode.Offline;
 
             // Pick a random AI opponent that is different from the player
             int aiIndex;
@@ -85,6 +85,18 @@ namespace PongLegends
             sessionData.aiCharacter = allCharacters[aiIndex];
 
             SceneManager.LoadScene("Game");
+        }
+
+        // Called by a "Play Online" button in the CharacterSelect scene.
+        // Stores the player's chosen character and hands off to the Lobby.
+        public void GoOnline()
+        {
+            if (_confirmed) return;
+            _confirmed = true;
+            sessionData.playerCharacter  = allCharacters[_selectedIndex];
+            sessionData.networkMode      = NetworkMode.OnlineHost; // lobby may override
+            sessionData.remoteCharacterIndex = -1;
+            SceneManager.LoadScene("Lobby");
         }
     }
 }

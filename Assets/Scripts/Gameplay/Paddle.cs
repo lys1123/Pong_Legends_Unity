@@ -4,7 +4,7 @@ using UnityEngine.InputSystem;
 
 namespace PongLegends
 {
-    public enum PaddleMode { Player, AI }
+    public enum PaddleMode { Player, AI, RemotePlayer }
     public enum KickType   { None, High, Strong, Low }
 
     [RequireComponent(typeof(SpriteRenderer))]
@@ -26,6 +26,8 @@ namespace PongLegends
         private bool _controlsInverted;
         private float _currentVelocity;
         private Transform _overrideTrackingTarget;
+        private float _networkY;           // received from remote machine
+        private KickType _pendingKick;     // consumed once per frame by PaddleNetworkSync
 
         // Flame/electric animation children
         private GameObject[] _animatedChildren;
@@ -52,6 +54,16 @@ namespace PongLegends
 
         private void Update()
         {
+            if (mode == PaddleMode.RemotePlayer)
+            {
+                // Smoothly track the last Y received over the network
+                Vector3 p = transform.position;
+                p.y = Mathf.Lerp(p.y, _networkY, Time.deltaTime * 20f);
+                transform.position = p;
+                AnimateFeature();
+                return;
+            }
+
             if (_isFrozen)
             {
                 _currentVelocity = 0f;
@@ -69,6 +81,9 @@ namespace PongLegends
 
             AnimateFeature();
         }
+
+        // Called by PaddleNetworkSync to drive this paddle from received network data.
+        public void SetNetworkY(float y) => _networkY = y;
 
         private float PlayerInput()
         {
@@ -116,6 +131,24 @@ namespace PongLegends
             if (kb.dKey.isPressed) return KickType.Low;
             return KickType.None;
         }
+
+        // Reads and clears the locally-pressed kick — called once per frame by PaddleNetworkSync
+        // so it can be transmitted to the host exactly once per key press.
+        public KickType ConsumeKickInput()
+        {
+            if (mode != PaddleMode.Player) return KickType.None;
+            var kb = Keyboard.current;
+            if (kb == null) return KickType.None;
+            if (kb.aKey.wasPressedThisFrame) { _pendingKick = KickType.High;   }
+            if (kb.sKey.wasPressedThisFrame) { _pendingKick = KickType.Strong; }
+            if (kb.dKey.wasPressedThisFrame) { _pendingKick = KickType.Low;    }
+            KickType k = _pendingKick;
+            _pendingKick = KickType.None;
+            return k;
+        }
+
+        // Called by PaddleNetworkSync when the host receives a kick event from the client.
+        public void ApplyNetworkKick(KickType kick) => _pendingKick = kick;
 
         // --- Ability API ---
 

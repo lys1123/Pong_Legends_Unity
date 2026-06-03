@@ -12,6 +12,7 @@ namespace PongLegends
         private Ball        _ball;
         private Paddle      _playerPaddle;
         private Paddle      _aiPaddle;
+        private NetworkMode _networkMode;
 
         // True while the ability effect is still active (projectile on screen / ghost balls alive).
         private readonly bool[] _abilityActive = new bool[2];
@@ -22,7 +23,8 @@ namespace PongLegends
         private const float AICooldownMin = 3f;
         private const float AICooldownMax = 6f;
 
-        private readonly GameObject[] _ironShields = new GameObject[2];
+        private readonly GameObject[] _ironShields       = new GameObject[2];
+        private readonly GameObject[] _visualIronShields = new GameObject[2];
 
         public void Initialize(SessionData session, Ball ball, Paddle playerPaddle, Paddle aiPaddle)
         {
@@ -30,6 +32,7 @@ namespace PongLegends
             _ball         = ball;
             _playerPaddle = playerPaddle;
             _aiPaddle     = aiPaddle;
+            _networkMode  = session.networkMode;
 
             ResetAICooldown();
         }
@@ -38,9 +41,18 @@ namespace PongLegends
         {
             var kb = Keyboard.current;
             if (kb != null && kb.spaceKey.wasPressedThisFrame)
-                Activate(PaddleSide.Player);
+            {
+                if (_networkMode == NetworkMode.OnlineClient)
+                {
+                    if (NetworkAbilityBridge.Instance != null)
+                        NetworkAbilityBridge.Instance.SendAbilityRequest();
+                }
+                else
+                    Activate(PaddleSide.Player);
+            }
 
-            if (!_flashActive)
+            // AI auto-fires only in offline mode; in online mode the "AI" side is a real player
+            if (_networkMode == NetworkMode.Offline && !_flashActive)
             {
                 _aiCooldown -= Time.deltaTime;
                 if (_aiCooldown <= 0f)
@@ -68,6 +80,9 @@ namespace PongLegends
             {
                 SoundManager.Play("ability_ironshield");
                 ExecuteIronDefense(side);
+                if (_networkMode == NetworkMode.OnlineHost && NetworkAbilityBridge.Instance != null)
+                    NetworkAbilityBridge.Instance.BroadcastSpawnIronShield(
+                        side, _ironShields[idx].transform.position);
                 return;
             }
 
@@ -105,10 +120,18 @@ namespace PongLegends
             var (onHitBall, onHitPaddle) = BuildEffect(def.abilityType);
             float speed                  = ProjectileSpeed(def.abilityType);
 
+            Vector2 spawnPos = ownPaddle.transform.position;
             SpawnProjectile(ownPaddle, oppPaddle, xDir, def.accentColor,
                             onHitBall, onHitPaddle, speed, def.abilityType,
                             () => _abilityActive[idx] = false);
+
+            if (_networkMode == NetworkMode.OnlineHost && NetworkAbilityBridge.Instance != null)
+                NetworkAbilityBridge.Instance.BroadcastProjectile(
+                    def.abilityType, spawnPos, xDir, def.accentColor);
         }
+
+        // Called on host when client requests ability activation via network
+        public void ActivateFromNetwork(PaddleSide side) => Activate(side);
 
         // ── Effect factory ───────────────────────────────────────────────────────
 
@@ -142,24 +165,46 @@ namespace PongLegends
                             float ang = UnityEngine.Random.Range(0f, 360f) * Mathf.Deg2Rad;
                             ball.SetVelocity(new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * spd);
                         },
-                        paddle => StartCoroutine(paddle.InvertControlsCoroutine(2f))
+                        paddle =>
+                        {
+                            StartCoroutine(paddle.InvertControlsCoroutine(2f));
+                            if (_networkMode == NetworkMode.OnlineHost)
+                                BroadcastNetPaddleEffect(paddle, NetworkEffectType.InvertControls, 2f);
+                        }
                     );
 
                 case AbilityType.Fireball:
                     return (
                         ball   => ball.MultiplySpeed(1.5f),
-                        paddle => StartCoroutine(paddle.ShrinkCoroutine(0.6f, 2f))
+                        paddle =>
+                        {
+                            StartCoroutine(paddle.ShrinkCoroutine(0.6f, 2f));
+                            if (_networkMode == NetworkMode.OnlineHost)
+                                BroadcastNetPaddleEffect(paddle, NetworkEffectType.Shrink, 2f);
+                        }
                     );
 
                 case AbilityType.IceShot:
                     return (
                         ball   => StartCoroutine(ball.FreezeCoroutine(1.5f)),
-                        paddle => StartCoroutine(paddle.FreezeCoroutine(1.5f))
+                        paddle =>
+                        {
+                            StartCoroutine(paddle.FreezeCoroutine(1.5f));
+                            if (_networkMode == NetworkMode.OnlineHost)
+                                BroadcastNetPaddleEffect(paddle, NetworkEffectType.Freeze, 1.5f);
+                        }
                     );
 
                 default:
                     return (null, null);
             }
+        }
+
+        private void BroadcastNetPaddleEffect(Paddle paddle, NetworkEffectType effect, float duration)
+        {
+            if (NetworkAbilityBridge.Instance == null) return;
+            PaddleSide side = paddle == _playerPaddle ? PaddleSide.Player : PaddleSide.AI;
+            NetworkAbilityBridge.Instance.BroadcastPaddleEffect(side, effect, duration);
         }
 
         private static string AbilitySoundName(AbilityType type) => type switch
@@ -200,7 +245,15 @@ namespace PongLegends
 
             _flashActive = true;
             Paddle opponent = idx == (int)PaddleSide.Player ? _aiPaddle : _playerPaddle;
+            PaddleSide opponentSide = idx == (int)PaddleSide.Player ? PaddleSide.AI : PaddleSide.Player;
             StartCoroutine(opponent.SilentFreezeCoroutine(0.5f));
+
+            if (_networkMode == NetworkMode.OnlineHost && NetworkAbilityBridge.Instance != null)
+            {
+                NetworkAbilityBridge.Instance.BroadcastPaparazziFlash();
+                NetworkAbilityBridge.Instance.BroadcastPaddleEffect(
+                    opponentSide, NetworkEffectType.SilentFreeze, 0.5f);
+            }
 
             yield return StartCoroutine(StrobeFlash(FindAnyObjectByType<Canvas>()));
 
@@ -208,10 +261,16 @@ namespace PongLegends
             _abilityActive[idx] = false;
         }
 
-        private static readonly Color        _flashWhite         = Color.white;
-        private static readonly Color        _flashYellow        = new(1f, 0.95f, 0.55f);
-        private static readonly Color        _flashClear         = Color.clear;
-        private static readonly WaitForSeconds _waitFlashFallback = new(0.5f);
+        // Called on client via network broadcast — run the flash visual locally
+        public void ClientRunPaparazziFlash()
+        {
+            StartCoroutine(StrobeFlash(FindAnyObjectByType<Canvas>()));
+        }
+
+        private static readonly Color         _flashWhite         = Color.white;
+        private static readonly Color         _flashYellow        = new(1f, 0.95f, 0.55f);
+        private static readonly Color         _flashClear         = Color.clear;
+        private static readonly WaitForSeconds _waitFlashFallback  = new(0.5f);
 
         private IEnumerator StrobeFlash(Canvas canvas)
         {
@@ -318,9 +377,92 @@ namespace PongLegends
             {
                 if (_ironShields[i] != null)
                 {
+                    if (_networkMode == NetworkMode.OnlineHost && NetworkAbilityBridge.Instance != null)
+                        NetworkAbilityBridge.Instance.BroadcastDestroyIronShield((PaddleSide)i);
                     Destroy(_ironShields[i]);
                     _ironShields[i] = null;
                 }
+            }
+            for (int i = 0; i < _visualIronShields.Length; i++)
+            {
+                if (_visualIronShields[i] != null)
+                {
+                    Destroy(_visualIronShields[i]);
+                    _visualIronShields[i] = null;
+                }
+            }
+        }
+
+        // ── Client-side visual methods (called on non-host machines) ─────────────
+
+        public void ClientSpawnProjectileVisual(AbilityType type, Vector3 startPos, float xDir, Color color)
+        {
+            var go = new GameObject("ProjectileVisual");
+            go.transform.position = startPos;
+            BuildProjectileVisual(go, type, color, xDir);
+            float speed = ProjectileSpeed(type);
+            StartCoroutine(MoveProjectileVisual(go, new Vector2(xDir * speed, 0f)));
+        }
+
+        private static IEnumerator MoveProjectileVisual(GameObject go, Vector2 velocity)
+        {
+            float elapsed = 0f;
+            while (go != null && elapsed < 5f)
+            {
+                go.transform.position += (Vector3)(velocity * Time.deltaTime);
+                elapsed += Time.deltaTime;
+                yield return null;
+            }
+            if (go != null) Destroy(go);
+        }
+
+        public void ClientSpawnGhostBalls(Vector2[] positions, Vector2[] velocities)
+        {
+            for (int i = 0; i < positions.Length; i++)
+            {
+                var go = new GameObject("GhostBallVisual");
+                go.transform.position   = new Vector3(positions[i].x, positions[i].y, 0f);
+                go.transform.localScale = new Vector3(Ball.Radius * 2f, Ball.Radius * 2f, 1f);
+                var sr = go.AddComponent<SpriteRenderer>();
+                sr.sprite       = SpriteFactory.Square;
+                sr.color        = Color.white;
+                sr.sortingOrder = 2;
+                var ghost = go.AddComponent<GhostBall>();
+                ghost.velocity = velocities[i];
+                Destroy(go, 2f);
+            }
+        }
+
+        public void ClientSpawnIronShieldVisual(PaddleSide side, Vector3 pos)
+        {
+            int idx = (int)side;
+            if (_visualIronShields[idx] != null)
+                Destroy(_visualIronShields[idx]);
+
+            Paddle ownPaddle = side == PaddleSide.Player ? _playerPaddle : _aiPaddle;
+            CharacterDefinition def = side == PaddleSide.Player
+                ? _session.playerCharacter : _session.aiCharacter;
+
+            var go = new GameObject("IronShieldVisual");
+            go.transform.position = pos;
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite       = SpriteFactory.Square;
+            sr.color        = def.accentColor;
+            sr.sortingOrder = 3;
+            go.transform.localScale = new Vector3(
+                ownPaddle.GetBounds().size.x * 0.5f,
+                ownPaddle.GetBounds().size.y, 1f);
+
+            _visualIronShields[idx] = go;
+        }
+
+        public void ClientDestroyIronShield(PaddleSide side)
+        {
+            int idx = (int)side;
+            if (_visualIronShields[idx] != null)
+            {
+                Destroy(_visualIronShields[idx]);
+                _visualIronShields[idx] = null;
             }
         }
 
@@ -374,6 +516,10 @@ namespace PongLegends
             // When the AI casts, all balls look identical so the player is deceived.
             bool ghostsVisibleToCaster = side == PaddleSide.Player;
             var allTransforms = new Transform[3];
+
+            var ghostPositions  = new System.Collections.Generic.List<Vector2>();
+            var ghostVelocities = new System.Collections.Generic.List<Vector2>();
+
             for (int i = 0; i < 3; i++)
             {
                 Vector2 v = new Vector2(Mathf.Cos(angles[i]), Mathf.Sin(angles[i])) * speed;
@@ -384,8 +530,11 @@ namespace PongLegends
                 }
                 else
                 {
+                    Vector2 ghostVel = v * 0.9f;
                     _ghostCount[idx]++;
-                    allTransforms[i] = SpawnGhost(_ball.transform.position, v * 0.9f, idx, ghostsVisibleToCaster).transform;
+                    allTransforms[i] = SpawnGhost(_ball.transform.position, ghostVel, idx, ghostsVisibleToCaster).transform;
+                    ghostPositions.Add(_ball.transform.position);
+                    ghostVelocities.Add(ghostVel);
                 }
             }
 
@@ -397,6 +546,10 @@ namespace PongLegends
                 int aiPick = UnityEngine.Random.Range(0, 3);
                 _aiPaddle.SetTrackingTarget(allTransforms[aiPick]);
             }
+
+            if (_networkMode == NetworkMode.OnlineHost && NetworkAbilityBridge.Instance != null)
+                NetworkAbilityBridge.Instance.BroadcastGhostBalls(
+                    ghostPositions.ToArray(), ghostVelocities.ToArray());
         }
 
         private static readonly Color _ghostVisibleColor = new(1f, 1f, 1f, 0.3f);

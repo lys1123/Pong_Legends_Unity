@@ -22,7 +22,9 @@ namespace PongLegends
         private string _playerName;
         private string _aiName;
 
-        public bool IsGameOver => _gameOver;
+        public bool IsGameOver  => _gameOver;
+        public int  PlayerScore => _playerScore;
+        public int  AIScore     => _aiScore;
 
         public void Initialize(string playerName, string aiName)
         {
@@ -63,6 +65,15 @@ namespace PongLegends
                 winnerOverlay?.Show(false, _aiName);
                 OnGameOver?.Invoke(false);
             }
+        }
+
+        // Called on client/spectator when receiving SyncScore event from host.
+        // Updates display only — does not trigger win-check logic.
+        public void ForceSetScore(int p1Score, int p2Score)
+        {
+            _playerScore = p1Score;
+            _aiScore     = p2Score;
+            UpdateUI();
         }
 
         private void UpdateUI()

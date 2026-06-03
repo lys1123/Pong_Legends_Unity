@@ -26,6 +26,8 @@ namespace PongLegends
 
         private Vector2 _velocity;
         private bool _inPlay;
+        private bool _networkControlled; // true on client/spectator — physics runs on host only
+        private Vector2 _networkLerpTarget;
         private SpriteRenderer _renderer;
         private readonly List<IronShield> _shields = new();
 
@@ -58,6 +60,16 @@ namespace PongLegends
 
         private void Update()
         {
+            // On client/spectator the host owns the simulation; we only lerp the visual position.
+            if (_networkControlled)
+            {
+                if (_networkLerpTarget != Vector2.zero)
+                    transform.position = Vector3.Lerp(transform.position,
+                        new Vector3(_networkLerpTarget.x, _networkLerpTarget.y, 0f),
+                        Time.deltaTime * 25f);
+                return;
+            }
+
             if (!_inPlay) return;
 
             transform.position += (Vector3)(_velocity * Time.deltaTime);
@@ -266,5 +278,18 @@ namespace PongLegends
 
         public void SetInPlay(bool value) => _inPlay = value;
         public bool IsInPlay() => _inPlay;
+
+        // --- Network API ---
+
+        public void SetNetworkControlled(bool value) => _networkControlled = value;
+
+        // Received from BallNetworkSync on client/spectator machines.
+        public void SetNetworkState(Vector2 pos, Vector2 vel, bool inPlay)
+        {
+            _networkLerpTarget = pos;
+            _velocity          = vel;
+            _inPlay            = inPlay;
+            if (!inPlay) SetColor(Color.white);
+        }
     }
 }
